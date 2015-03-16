@@ -36,9 +36,9 @@ object Main extends App {
 
   val states = List("NOUN", "ADV", "PRT", ".", "ADP", "DET", "PRON", "VERB", "X", "NUM", "CONJ", "ADJ")
 
-  val trainDocuments = new ConLLFileReader("/Users/tombocklisch/Documents/Studium/ANLP/deep-nlp-scala/assets/de-train.tt")
+  val trainDocuments = new ConLLFileReader("assets/de-train.tt")
 
-  val testDocuments = new ConLLFileReader("/Users/tombocklisch/Documents/Studium/ANLP/deep-nlp-scala/assets/de-eval.tt")
+  val testDocuments = new ConLLFileReader("assets/de-eval.tt")
   
   def evaluateHMM(hmm: HMM): Unit = {
     val trainedHMM = hmm.train(trainDocuments)
@@ -103,9 +103,9 @@ object Main extends App {
   }
   
   def LCCReader() = {
-    val vec = trainWordVectorModel()
-    storeWordVectorModel(vec)
-//    val vec = loadWordVectorModel()
+//    val vec = trainWordVectorModel()
+//    storeWordVectorModel(vec)
+    val vec = loadWordVectorModel()
     
     println("Finished Word2Vec!")
 
