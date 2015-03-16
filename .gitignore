@@ -11,6 +11,10 @@ lib_managed/
 src_managed/
 project/boot/
 project/plugins/project/
+output/
+project-ivy-repo/
+word2vec-index/
+.idea/
 
 # Scala-IDE specific
 .scala_dependencies
