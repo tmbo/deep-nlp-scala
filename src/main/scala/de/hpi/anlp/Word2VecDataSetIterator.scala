@@ -6,6 +6,7 @@ package de.hpi.anlp
 import de.hpi.WindowConverter
 import org.deeplearning4j.datasets.iterator.{DataSetPreProcessor, DataSetIterator}
 import org.deeplearning4j.models.word2vec.Word2Vec
+import org.deeplearning4j.text.inputsanitation.InputHomogenization
 import org.deeplearning4j.text.movingwindow.{Windows, Window}
 import org.nd4j.linalg.dataset.DataSet
 import org.nd4j.linalg.factory.Nd4j
@@ -30,7 +31,7 @@ class Word2VecDataSetIterator(vec: Word2Vec, sentenceIter: Iterable[List[Annotat
     var counter = 0
     sentenceIter.flatMap{ sentence =>
       import scala.collection.JavaConversions._
-      val words = sentence.map(_.token)
+      val words = sentence.map(s => new InputHomogenization(s.token).transform())
       val wordLabels = sentence.map(_.tag)
       counter += 1
       if(counter % 3500 == 0)
