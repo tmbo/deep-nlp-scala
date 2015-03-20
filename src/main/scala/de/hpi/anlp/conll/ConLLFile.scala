@@ -1,17 +1,24 @@
-/*
- * Copyright (C) 20011-2014 Scalable minds UG (haftungsbeschränkt) & Co. KG. <http://scm.io>
- */
-package de.hpi.anlp
+package de.hpi.anlp.conll
 
-import java.io.{PrintWriter, File}
-
+import java.io.{File, PrintWriter}
 import scala.io.Source
 
+/**
+ * A token and its tag
+ */
 case class AnnotatedToken(token: String, tag: String)
 
+/**
+ * Writer helper to write a sentence and its annotated tags into a ConLL file format. This allows external evaluators
+ * based on that format to read the output 
+ *
+ */
 class ConLLFileWriter(fileName: String) {
   var openedWriter: Option[PrintWriter] = Some(new PrintWriter(new File(fileName)))
 
+  /**
+   * Write sentence and its tag to file. One token and tag per line
+   */
   def write(sentence: Seq[String], annotations: Seq[String]): Boolean = {
     openedWriter.map { writer =>
       sentence.zip(annotations).map {
@@ -33,6 +40,9 @@ class ConLLFileWriter(fileName: String) {
   }
 }
 
+/**
+ * Helper class to iterate through a ConLL data set file.
+ */
 class ConLLFileReader(fileName: String) extends Iterable[List[AnnotatedToken]] {
   override def iterator = new Iterator[List[AnnotatedToken]] {
     val lineIt = Source.fromFile(fileName).getLines

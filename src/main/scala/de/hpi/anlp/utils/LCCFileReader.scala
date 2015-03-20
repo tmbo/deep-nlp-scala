@@ -1,11 +1,14 @@
-/*
- * Copyright (C) 20011-2014 Scalable minds UG (haftungsbeschränkt) & Co. KG. <http://scm.io>
- */
-package de.hpi.anlp
+package de.hpi.anlp.utils
 
 import scala.io.Source
 
+/**
+ * File reader to process data sets from the NLP institute of the university of Leipzig
+ */
 class LCCFileReader(fileName: String) extends Iterable[String] {
+  /**
+   * Every sentence is preceeded by its id. We are going to strip the id since we are only interested in the sentence 
+   */
   val sentenceFileRx = "(?s)^[0-9]+\\s(.*)$" r
 
   override def iterator = new Iterator[String] {
@@ -27,6 +30,7 @@ class LCCFileReader(fileName: String) extends Iterable[String] {
 
     private def readNextFromInput(): Option[String] = {
       if (lineIt.hasNext) {
+        // Read next sentence and strip the id from it
         val current = lineIt.next()
         current match {
           case sentenceFileRx(sentence) =>

@@ -1,13 +1,11 @@
-/*
- * Copyright (C) 20011-2014 Scalable minds UG (haftungsbeschränkt) & Co. KG. <http://scm.io>
- */
-package de.hpi.anlp
+package de.hpi.anlp.utils
 
 import de.hpi.WindowConverter
-import org.deeplearning4j.datasets.iterator.{DataSetPreProcessor, DataSetIterator}
+import de.hpi.anlp.conll.AnnotatedToken
+import org.deeplearning4j.datasets.iterator.{DataSetIterator, DataSetPreProcessor}
 import org.deeplearning4j.models.word2vec.Word2Vec
 import org.deeplearning4j.text.inputsanitation.InputHomogenization
-import org.deeplearning4j.text.movingwindow.{Windows, Window}
+import org.deeplearning4j.text.movingwindow.Windows
 import org.nd4j.linalg.dataset.DataSet
 import org.nd4j.linalg.factory.Nd4j
 import org.nd4j.linalg.util.FeatureUtil
@@ -18,23 +16,35 @@ import org.nd4j.linalg.util.FeatureUtil
  * @param sentenceIter the sentence iterator to use
  * @param labels the possible labels
  * @param batch the batch size
- */  
+ */
 class Word2VecDataSetIterator(vec: Word2Vec, sentenceIter: Iterable[List[AnnotatedToken]], labels: List[String], val batch: Int = 10) extends DataSetIterator {
-  
+
+  /**
+   * Underlying active window iterator 
+   */
   var iter = windowIter()
-  
+
+  /**
+   * Index to lookup label ids 
+   */
   val labelIdx = labels.zipWithIndex.toMap
-  
+
+  /**
+   * Data set preprocessor 
+   */
   var preProcessor: Option[DataSetPreProcessor] = None
 
+  /**
+   * Returns an iterate-once collection holding windows of the given size
+   */
   def windowIter() = {
     var counter = 0
-    sentenceIter.flatMap{ sentence =>
+    sentenceIter.flatMap { sentence =>
       import scala.collection.JavaConversions._
       val words = sentence.map(s => new InputHomogenization(s.token).transform())
       val wordLabels = sentence.map(_.tag)
       counter += 1
-      if(counter % 3500 == 0)
+      if (counter % 3500 == 0)
         println("Processing sentence " + counter)
       Windows.windows(words, vec.getWindow()).zip(wordLabels).map {
         case (window, label) =>
@@ -55,15 +65,16 @@ class Word2VecDataSetIterator(vec: Word2Vec, sentenceIter: Iterable[List[Annotat
     synchronized {
       try {
         val windows = iter.take(num).toList
-        
+
         iter = iter.drop(num)
-        
+
         if (windows.isEmpty)
           null
         else {
           val inputs = Nd4j.create(windows.size, inputColumns())
           val labelOutput = Nd4j.create(windows.size, labels.size)
 
+          // Iterate over all windows to convert them to matrix format
           windows.zipWithIndex.foreach {
             case (window, row) =>
               inputs.putRow(row, WindowConverter.asExampleMatrix(window, vec))
@@ -90,12 +101,12 @@ class Word2VecDataSetIterator(vec: Word2Vec, sentenceIter: Iterable[List[Annotat
   override def totalExamples(): Int = {
     throw new UnsupportedOperationException()
   }
-  
-  override def inputColumns(): Int= {
+
+  override def inputColumns(): Int = {
     vec.lookupTable().layerSize() * vec.getWindow()
   }
-  
-  override def totalOutcomes(): Int= {
+
+  override def totalOutcomes(): Int = {
     labels.size
   }
 
@@ -119,7 +130,7 @@ class Word2VecDataSetIterator(vec: Word2Vec, sentenceIter: Iterable[List[Annotat
    *
    * @return {true} if the iteration has more elements
    */
-  override def hasNext(): Boolean =  {
+  override def hasNext(): Boolean = {
     !iter.isEmpty
   }
 
@@ -139,19 +150,12 @@ class Word2VecDataSetIterator(vec: Word2Vec, sentenceIter: Iterable[List[Annotat
    * is unspecified if the underlying collection is modified while the
    * iteration is in progress in any way other than by calling this
    * method.
-   *
-   * @throws UnsupportedOperationException if the {remove}
-   *                                       operation is not supported by this iterator
-   * @throws IllegalStateException         if the {next} method has not
-   *                                       yet been called, or the {remove} method has already
-   *                                       been called after the last call to the {next}
-   *                                       method
    */
   override def remove(): Unit = {
     throw new UnsupportedOperationException()
   }
 
   override def setPreProcessor(dataSetPreprocessor: DataSetPreProcessor): Unit = {
-    preProcessor =  Some(dataSetPreprocessor)
+    preProcessor = Some(dataSetPreprocessor)
   }
 }

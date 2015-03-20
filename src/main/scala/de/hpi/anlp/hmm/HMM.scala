@@ -1,84 +1,18 @@
-/*
- * Copyright (C) 20011-2014 Scalable minds UG (haftungsbeschränkt) & Co. KG. <http://scm.io>
- */
 package de.hpi.anlp.hmm
 
-import de.hpi.anlp.AnnotatedToken
+import de.hpi.anlp.conll.AnnotatedToken
 import scala.collection.mutable
-import scala.collection.breakOut
 
-
-case class TrainedHMM(states: List[String],
-                      n: Int,
-                      underlyingEmissionProbs: Array[Map[String, Double]],
-                      underlyingTransitionProbs: Array[Double],
-                      underlyingStartProbs: Array[Double]) {
-
-  def incommingProbabilities(trellis: Vector[Array[Double]], sidx: Int, trellisLevel: Int, emissionPs: Array[Double]): Map[Int, Double] = {
-    (0 until states.size).map { prevStateIdx =>
-      val probability = trellis(trellisLevel - 1)(prevStateIdx) +
-        math.log(transitionProbability(prevStateIdx, sidx)) +
-        math.log(emissionPs(sidx))
-
-      prevStateIdx -> probability
-    }(breakOut)
-  }
-
-  def viterbi(observations: List[String]) = {
-    observations match {
-      case Nil =>
-        0.0 -> Vector.empty
-      case firstObservation :: remainingObservations =>
-        var paths = states.toArray.map(state => Vector(state))
-        val initialNodeLevel = states.zipWithIndex.toArray.map {
-          case (state, idx) =>
-            math.log(startProbability(idx)) + math.log(emissionProbability(idx, firstObservation))
-        }
-
-        var trellis = Vector(initialNodeLevel)
-
-        remainingObservations.zipWithIndex.map {
-          case (observation, trellisLevel) =>
-            val nextNodeLevel = new Array[Double](states.size)
-            val updatedPaths = new Array[Vector[String]](states.size)
-            var emissionPs: Array[Double] = (0 until states.size).map { idx =>
-              emissionProbability(idx, observation)
-            }(breakOut)
-
-            if (emissionPs.forall(_ == 0))
-              emissionPs = Array.fill(states.size)(1.0)
-
-            states.zipWithIndex.map {
-              case (state, sidx) =>
-                val (bestState, bestProb) = incommingProbabilities(trellis, sidx, trellisLevel + 1, emissionPs).maxBy(_._2)
-                nextNodeLevel.update(sidx, bestProb)
-                updatedPaths.update(sidx, paths(bestState) :+ state)
-            }
-            
-            trellis :+= nextNodeLevel
-            paths = updatedPaths
-        }
-        
-        val (bestProb, bestState) = trellis.last.zipWithIndex.maxBy(_._1)
-        bestProb -> paths(bestState)
-    }
-  }
-
-  def emissionProbability(sidx: Int, observation: String): Double =
-    underlyingEmissionProbs(sidx)(observation)
-
-  def transitionProbability(from: Int, to: Int): Double =
-    underlyingTransitionProbs(from * states.size + to)
-
-  def startProbability(sidx: Int): Double =
-    underlyingStartProbs(sidx)
-
-  def mostProbablePath(observations: List[String]) = viterbi(observations)
-}
-
+/**
+ * HMM to be configured. After train is called a new trainedHMM instance is created
+ */
 class HMM(states: List[String], n: Int = 2) {
   val stateIdx = states.zipWithIndex.toMap
 
+  /**
+   * Train traverses the input data, collects statistics and calculates probabilities for hidden states and outputs. 
+   * Those can then be used in the HMM to predict tags for unseen sentences 
+   */
   def train(annotatedData: Iterable[List[AnnotatedToken]]) = {
     val transitions = new Array[Double](math.pow(states.size, n).toInt)
 
@@ -113,16 +47,25 @@ class HMM(states: List[String], n: Int = 2) {
     new TrainedHMM(states, n, emissionProbs, transitionProbs, startProbs)
   }
 
+  /**
+   * Given the number of seen starts, calculate the start probabilities
+   */
   def calculateStartProbabilities(starts: Array[Double]) = {
     val sum = starts.sum
     starts.map(_ / sum)
   }
 
+  /**
+   * Given the transition statistics, calculate transition probabilities
+   */
   def calculateTransitionProbabilities(transitions: Array[Double]) = {
     val sum = transitions.sum
     transitions.map(_ / sum)
   }
 
+  /**
+   * Given emission statistics calculate emission probabilities for each hidden state
+   */
   def calculateEmissionProbabilities(emissions: Array[mutable.Map[String, Int]]) = {
     emissions.map { emissionsForTag =>
       val sum = emissionsForTag.values.sum

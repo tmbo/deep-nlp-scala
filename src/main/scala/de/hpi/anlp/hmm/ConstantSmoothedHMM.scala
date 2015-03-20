@@ -1,10 +1,11 @@
-/*
- * Copyright (C) 20011-2014 Scalable minds UG (haftungsbeschränkt) & Co. KG. <http://scm.io>
- */
 package de.hpi.anlp.hmm
 
 import scala.collection.mutable
 
+/**
+ * Extension of the base HMM implementation to use constant smoothing. This is especially useful for words and tag word
+ * combinations that were not seen during training
+ */
 class ConstantSmoothedHMM(states: List[String], n: Int = 2, smoothingConstant: Int = 1) extends HMM(states, n) {
   override def calculateStartProbabilities(starts: Array[Double]) = {
     val sum = starts.sum  + states.size * smoothingConstant
