@@ -10,14 +10,18 @@ class POSEvaluator(tags: List[String]) {
   val tagCounter: Map[String, mutable.Map[String, Int]] = tags.map { tag =>
     tag -> mutable.HashMap("system" -> 0, "gold" -> 0, "both" -> 0)
   }(breakOut)
+
+  def add(tagged: String, gold: String) : Unit = {
+    tagCounter(tagged)("system") += 1
+    tagCounter(gold)("gold") += 1
+    if(tagged == gold)
+      tagCounter(gold)("both") += 1
+  }
   
   def add(tagged: Seq[String], gold: Seq[String]) : Unit = {
     tagged.zip(gold).map{
       case (systemTag, goldTag) =>
-        tagCounter(systemTag)("system") += 1
-        tagCounter(goldTag)("gold") += 1
-        if(systemTag == goldTag)
-          tagCounter(goldTag)("both") += 1
+        add(systemTag, goldTag)
     }
   }
   

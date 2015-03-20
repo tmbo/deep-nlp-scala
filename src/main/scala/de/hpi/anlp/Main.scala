@@ -2,6 +2,8 @@ package de.hpi.anlp
 
 import java.io.File
 import java.util
+import de.hpi.anlp.ann.MLP.MLPMultiClassifier
+import de.hpi.anlp.ann.{MLPConfig, MLP}
 import de.hpi.anlp.hmm.{ConstantSmoothedHMM, HMM}
 import edu.stanford.nlp.tagger.maxent.MaxentTagger
 import org.apache.commons.math3.random.MersenneTwister
@@ -33,10 +35,12 @@ import org.deeplearning4j.text.sentenceiterator.{SentencePreProcessor, FileSente
 import org.deeplearning4j.text.tokenization.tokenizerfactory.UimaTokenizerFactory
 import org.deeplearning4j.util.SerializationUtils
 import org.nd4j.linalg.api.activation.Activations
-import org.nd4j.linalg.api.ndarray.INDArray
+import org.nd4j.linalg.api.ndarray.{BaseNDArray, INDArray}
 import org.nd4j.linalg.factory.Nd4j
 import org.nd4j.linalg.lossfunctions.LossFunctions
-import org.nd4j.linalg.netlib.SimpleNetlibBlas
+import org.nd4j.linalg.netlib.{NetlibBlasNDArray, SimpleNetlibBlas}
+import org.scalaml.core.Types.ScalaMl.{DblMatrix, DblVector}
+import org.scalaml.core.XTSeries
 
 object Main extends App {
   
@@ -49,6 +53,10 @@ object Main extends App {
   val wordVecLayers = 50
 
   val states = List("NOUN", "ADV", "PRT", ".", "ADP", "DET", "PRON", "VERB", "X", "NUM", "CONJ", "ADJ")
+
+  val statesIndex = states.zipWithIndex.map{
+    case (el, i) => i -> el
+  }.toMap
 
   val trainDocuments = new ConLLFileReader("assets/de-train.tt")
 
@@ -107,7 +115,59 @@ object Main extends App {
     vec.fit()
     vec
   }
+  
+  def INDArrayTo2DDoubleMatrix(v: INDArray): DblMatrix = {
+    val dims = v.shape()
+    (0 until dims(0)).toArray.map { x =>
+      (0 until dims(1)).toArray.map { y =>
+        v.getDouble(x, y)
+      }
+    }
+  }
 
+  def INDArrayToDoubleVector(v: INDArray): DblVector = {
+    (0 until v.length).toArray.map{ i =>
+      v.getDouble(i)
+    }
+  }
+
+  
+  def labelForArray(a: INDArray) = {
+    val m = SimpleNetlibBlas.iamax(a)
+    statesIndex(m)
+  }
+  
+  def trainMLP() = {
+    val NUM_EPOCHS = 250
+    val EPS = 1.0e-4
+    val ETA = 0.03
+    val hiddenLayers = Array[Int](18)
+    val ALPHA = 0.9
+
+    val config = MLPConfig(ALPHA, ETA, hiddenLayers, NUM_EPOCHS, EPS)
+    val mlp = POSMLP.train(config, states, trainDocuments, preW = 1, postW = 1)
+
+    println("\n--- Finished training of MLP")
+    
+    // Evaluating the model
+
+    val evaluator = new POSEvaluator(states)
+
+    println("\n--- Evaluation of MLP ...")
+
+    testDocuments.foreach{ sentence =>
+      val unannotated = sentence.map(_.token)
+      val tags = mlp.output(unannotated)
+      //      fileWriter.write(unannotated, tags)
+      evaluator.add(tagged = tags, gold = sentence.map(_.tag))
+    }
+
+    evaluator.printEvaluation()
+
+    println("---")
+    
+  }
+  
   def loadWordVectorModel() = {
     SerializationUtils.readObject(new File(s"output/word2vec_$vecTrainSize.model")).asInstanceOf[Word2Vec]
   }
@@ -120,7 +180,7 @@ object Main extends App {
     SerializationUtils.saveObject(model, new File(s"output/word2vec_$vecTrainSize.model"));
   }
   
-  def LCCReader() = {
+  def TrainDeeplearning4jModel() = {
 //    val vec = trainWordVectorModel()
 //    storeWordVectorModel(vec)
     val vec = loadWordVectorModel()
@@ -149,23 +209,6 @@ object Main extends App {
       .hiddenLayerSizes(50)
       .build()
 
-//    val json = conf.toJson()
-    
-//    val stateTracker = new HazelCastStateTracker
-
-//    val distributedConf = new Configuration()
-//    distributedConf.set(DeepLearningConfigurable.MULTI_LAYER_CONF,json)
-//    distributedConf.set(DeepLearningConfigurable.CLASS,classOf[RBM].getName());
-//    distributedConf.set(WorkerPerformerFactory.WORKER_PERFORMER,classOf[MultilayerNetworkPerformerFactory].getName);
-//    val iter: JobIterator = new DataSetIteratorJobIterator(fetcher)
-
-    //run the master
-//    val runner = new DeepLearning4jDistributed(iter, stateTracker)
-//    runner.setup(distributedConf)
-//    val modelSaver = new DefaultModelSaver(new File("output/nn-model.bin"))
-//    runner.setModelSaver(modelSaver)
-//    runner.train()
-
     val network = new MultiLayerNetwork(conf)
     
 
@@ -174,14 +217,10 @@ object Main extends App {
     network.fit(fetcher)
     
     println("Finished fitting Network!")
-    
-//    val network = modelSaver.load(classOf[MultiLayerNetwork])
-//
+
     SerializationUtils.saveObject(network, new File(s"output/network_$vecTrainSize.model6"))
 
     val testData = new Word2VecDataSetIterator(vec, testDocuments, states, batch = 20000).next()
-
-//    val actualLabels = 
 
     val predicted = network.output(testData.getFeatureMatrix)
 
@@ -203,20 +242,14 @@ object Main extends App {
     val predicted = network.output(testData.getFeatureMatrix)
     val evaluator = new POSEvaluator(states)
     
-    val labelIndex = states.zipWithIndex.map{
-      case (el, i) => i -> el
-    }.toMap
-    
     val predictedLabels: Seq[String] = (0 until predicted.length()).map{ i =>
       val guessRow: INDArray = predicted.getRow(i)
-      val guessMax = SimpleNetlibBlas.iamax(guessRow)
-      labelIndex(guessMax)
+      labelForArray(guessRow)
     }
     
     val goldLabels = (0 until testData.numExamples()).map{ i =>
       val currRow: INDArray = testData.getLabels.getRow(i)
-      val currMax = SimpleNetlibBlas.iamax(currRow)
-      labelIndex(currMax)
+      labelForArray(currRow)
     }
 
     evaluator.add(predictedLabels, goldLabels)
@@ -228,21 +261,6 @@ object Main extends App {
     println("---")
   }
 
-//  evaluateNetwork("output/network_10K.model1")
-  LCCReader()
-  
-}
 
-class NeuralNetworkPerformerFactory extends BaseWorkPerformerFactory {
-
-  def instantiate: WorkerPerformer = {
-    new NeuralNetWorkPerformer()
-  }
-}
-
-class MultilayerNetworkPerformerFactory extends BaseWorkPerformerFactory{
-  def instantiate: BaseMultiLayerNetworkWorkPerformer = {
-    new BaseMultiLayerNetworkWorkPerformer
-  }
-  
+  trainMLP()
 }
