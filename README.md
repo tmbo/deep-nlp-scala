@@ -1,5 +1,7 @@
 # deep-nlp-scala
-Using deep learning to POS tag sentences using scala + DL4J 
+Using deep learning to POS tag sentences using scala + DL4J.
+
+This is a showcase repository intended to evaluate different algorithms on the task of POS tagging german sentences. There is a Multilayerperceptron (from scratch), a Hidden-Markov-Model (from scratch) and a RBF deep net (based on DL4J) implementation.
 
 ## Installation
 To execute the project one needs to make sure sbt 0.13 and java >= 1.6 is installed.
